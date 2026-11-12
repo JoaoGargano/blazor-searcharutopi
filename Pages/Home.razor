@@ -1,0 +1,342 @@
+@page "/"
+@using SearchNarutoAPI.Models
+@inject HttpClient Http
+
+<PageTitle>SearchNarutoAPI - Personagens de Naruto</PageTitle>
+
+<div class="container py-2">
+    <!-- Cabeçalho -->
+    <div class="text-center mb-4">
+        <h1 class="display-6 fw-bold text-warning" style="text-shadow: 1px 1px 2px #d97706;">
+            🍥 Naruto API (Dattebayo API)
+        </h1>
+        <p class="text-muted">
+            Aplicação em <strong>Blazor WebAssembly (.NET 10+)</strong> para listar e buscar ninjas do universo de Naruto
+        </p>
+    </div>
+
+    <!-- Barra de Busca -->
+    <div class="card shadow-sm border-0 mb-4" style="background-color: #fff8f0; border-left: 5px solid #f97316 !important;">
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-7">
+                    <label for="termoBusca" class="form-label fw-semibold text-dark">Nome do Personagem:</label>
+                    <input type="text"
+                           class="form-control"
+                           id="termoBusca"
+                           placeholder="Ex: Naruto Uzumaki, Sasuke Uchiha, Sakura Haruno..."
+                           @bind="termoBusca"
+                           @bind:event="oninput"
+                           @onkeydown="HandleKeyDown" />
+                </div>
+                <div class="col-md-5 d-flex align-items-end gap-2">
+                    <button class="btn btn-warning flex-grow-1 text-dark fw-bold" @onclick="BuscarPorNome" disabled="@carregando">
+                        <i class="bi bi-search"></i> Buscar
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="ListarTodos" disabled="@carregando">
+                        Listar Todos
+                    </button>
+                    @if (!string.IsNullOrWhiteSpace(termoBusca))
+                    {
+                        <button class="btn btn-outline-danger" @onclick="LimparBusca" title="Limpar pesquisa">
+                            Limpar
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Sugestões de Busca Rápida -->
+            <div class="mt-3 d-flex flex-wrap align-items-center gap-1 small">
+                <span class="text-muted me-1">Atalhos de busca:</span>
+                <button class="btn btn-sm btn-outline-warning text-dark py-0 px-2" @onclick='() => BuscarRapido("Naruto Uzumaki")'>Naruto</button>
+                <button class="btn btn-sm btn-outline-warning text-dark py-0 px-2" @onclick='() => BuscarRapido("Sasuke Uchiha")'>Sasuke</button>
+                <button class="btn btn-sm btn-outline-warning text-dark py-0 px-2" @onclick='() => BuscarRapido("Sakura Haruno")'>Sakura</button>
+                <button class="btn btn-sm btn-outline-warning text-dark py-0 px-2" @onclick='() => BuscarRapido("Kakashi Hatake")'>Kakashi</button>
+                <button class="btn btn-sm btn-outline-warning text-dark py-0 px-2" @onclick='() => BuscarRapido("Itachi Uchiha")'>Itachi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Indicador de Carregamento -->
+    @if (carregando)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-warning" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+            <p class="mt-3 text-muted fw-semibold">Consultando a Dattebayo API...</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(mensagemErro))
+    {
+        <div class="alert alert-warning text-center shadow-sm" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            @mensagemErro
+        </div>
+    }
+    else if (personagens != null && personagens.Any())
+    {
+        <!-- Barra de Informações de Quantidade e Paginação -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="text-muted small">
+                Exibindo <strong>@personagens.Count</strong> personagem(ns)
+                @if (modoPaginado && totalPaginas > 1)
+                {
+                    <span>(Página @paginaAtual de @totalPaginas - Total: @totalRegistros)</span>
+                }
+            </span>
+
+            @if (modoPaginado && totalPaginas > 1)
+            {
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-outline-warning text-dark"
+                            @onclick="PaginaAnterior"
+                            disabled="@(paginaAtual <= 1 || carregando)">
+                        &laquo; Anterior
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning text-dark"
+                            @onclick="ProximaPagina"
+                            disabled="@(paginaAtual >= totalPaginas || carregando)">
+                        Próxima &raquo;
+                    </button>
+                </div>
+            }
+        </div>
+
+        <!-- Grade de Cards com os Personagens -->
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mb-4">
+            @foreach (var p in personagens)
+            {
+                <div class="col">
+                    <div class="card h-100 shadow-sm border-0">
+                        <!-- Imagem do Personagem (images) -->
+                        <div class="text-center p-3" style="background: linear-gradient(135deg, #1e293b, #0f172a); border-top-left-radius: var(--bs-card-inner-border-radius); border-top-right-radius: var(--bs-card-inner-border-radius);">
+                            <img src="@p.ObterImagemPrincipal()"
+                                 alt="@p.Name"
+                                 class="img-fluid rounded"
+                                 style="height: 230px; object-fit: contain;"
+                                 onerror="this.src='https://via.placeholder.com/230x230?text=Sem+Imagem';" />
+                        </div>
+
+                        <div class="card-body d-flex flex-column">
+                            <!-- Nome (name) -->
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h5 class="card-title fw-bold text-dark mb-0">@p.Name</h5>
+                                <span class="badge bg-secondary">ID: @p.Id</span>
+                            </div>
+
+                            <!-- Clã ou Afiliação (personal.clan / personal.affiliation) -->
+                            <div class="mb-2 small">
+                                <strong class="text-secondary">Clã / Afiliação:</strong>
+                                <span class="badge bg-warning text-dark ms-1">
+                                    @(p.Personal?.ObterClanOuAffiliation() ?? "Não informado")
+                                </span>
+                            </div>
+
+                            <!-- Patente Ninja (rank.ninjaRank) -->
+                            <div class="mb-2 small">
+                                <strong class="text-secondary">Patente Ninja:</strong>
+                                <span class="text-dark fw-semibold ms-1">
+                                    @(p.Rank?.ObterNinjaRank() ?? "Não informado")
+                                </span>
+                            </div>
+
+                            <!-- Lista de Jutsus (jutsu) -->
+                            <div class="mt-2 pt-2 border-top">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <strong class="small text-secondary">
+                                        Jutsus (@(p.Jutsu?.Count ?? 0)):
+                                    </strong>
+                                </div>
+                                <div style="max-height: 110px; overflow-y: auto;" class="border rounded p-2 bg-light small">
+                                    @if (p.Jutsu != null && p.Jutsu.Any())
+                                    {
+                                        <ul class="mb-0 ps-3">
+                                            @foreach (var jutsu in p.Jutsu)
+                                            {
+                                                <li>@jutsu</li>
+                                            }
+                                        </ul>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted fst-italic">Nenhum jutsu listado.</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (modoPaginado && totalPaginas > 1)
+        {
+            <div class="d-flex justify-content-center mb-5">
+                <div class="btn-group">
+                    <button class="btn btn-outline-warning text-dark"
+                            @onclick="PaginaAnterior"
+                            disabled="@(paginaAtual <= 1 || carregando)">
+                        &laquo; Página Anterior
+                    </button>
+                    <span class="btn btn-warning disabled text-dark fw-bold">
+                        Página @paginaAtual de @totalPaginas
+                    </span>
+                    <button class="btn btn-outline-warning text-dark"
+                            @onclick="ProximaPagina"
+                            disabled="@(paginaAtual >= totalPaginas || carregando)">
+                        Próxima Página &raquo;
+                    </button>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="alert alert-info text-center py-4">
+            Nenhum personagem para exibir. Digite um nome para buscar ou clique em "Listar Todos".
+        </div>
+    }
+</div>
+
+@code {
+    private string termoBusca = string.Empty;
+    private List<NarutoCharacter>? personagens = new();
+    private bool carregando = false;
+    private string? mensagemErro;
+
+    // Paginação
+    private int paginaAtual = 1;
+    private int totalPaginas = 1;
+    private int totalRegistros = 0;
+    private bool modoPaginado = true;
+    private const int tamanhoPagina = 20;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Carrega inicialmente a página 1 com os personagens principais
+        await CarregarPagina(1);
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await BuscarPorNome();
+        }
+    }
+
+    private async Task BuscarRapido(string nome)
+    {
+        termoBusca = nome;
+        await BuscarPorNome();
+    }
+
+    private async Task BuscarPorNome()
+    {
+        if (string.IsNullOrWhiteSpace(termoBusca))
+        {
+            await ListarTodos();
+            return;
+        }
+
+        carregando = true;
+        mensagemErro = null;
+        modoPaginado = false;
+
+        try
+        {
+            string url = $"https://dattebayo-api.onrender.com/characters?name={Uri.EscapeDataString(termoBusca.Trim())}";
+            string json = await Http.GetStringAsync(url);
+            var response = JsonConvert.DeserializeObject<NarutoApiResponse>(json);
+
+            if (response?.Characters != null && response.Characters.Any())
+            {
+                personagens = response.Characters;
+            }
+            else
+            {
+                personagens = new();
+                mensagemErro = $"Nenhum personagem encontrado com o nome \"{termoBusca}\".";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            personagens = new();
+            mensagemErro = $"Nenhum personagem encontrado com o nome \"{termoBusca}\" na Dattebayo API.";
+        }
+        catch (Exception ex)
+        {
+            personagens = new();
+            mensagemErro = $"Ocorreu um erro ao consultar a API: {ex.Message}";
+        }
+        finally
+        {
+            carregando = false;
+        }
+    }
+
+    private async Task ListarTodos()
+    {
+        termoBusca = string.Empty;
+        await CarregarPagina(1);
+    }
+
+    private async Task CarregarPagina(int pagina)
+    {
+        carregando = true;
+        mensagemErro = null;
+        modoPaginado = true;
+
+        try
+        {
+            string url = $"https://dattebayo-api.onrender.com/characters?page={pagina}&limit={tamanhoPagina}";
+            string json = await Http.GetStringAsync(url);
+            var response = JsonConvert.DeserializeObject<NarutoApiResponse>(json);
+
+            if (response?.Characters != null)
+            {
+                personagens = response.Characters;
+                paginaAtual = response.CurrentPage > 0 ? response.CurrentPage : pagina;
+                totalRegistros = response.Total;
+                totalPaginas = totalRegistros > 0 ? (int)Math.Ceiling((double)totalRegistros / tamanhoPagina) : 1;
+            }
+            else
+            {
+                personagens = new();
+                mensagemErro = "Não foi possível carregar os personagens da API.";
+            }
+        }
+        catch (Exception ex)
+        {
+            personagens = new();
+            mensagemErro = $"Erro ao carregar lista de personagens: {ex.Message}";
+        }
+        finally
+        {
+            carregando = false;
+        }
+    }
+
+    private async Task ProximaPagina()
+    {
+        if (paginaAtual < totalPaginas)
+        {
+            await CarregarPagina(paginaAtual + 1);
+        }
+    }
+
+    private async Task PaginaAnterior()
+    {
+        if (paginaAtual > 1)
+        {
+            await CarregarPagina(paginaAtual - 1);
+        }
+    }
+
+    private async Task LimparBusca()
+    {
+        termoBusca = string.Empty;
+        await CarregarPagina(1);
+    }
+}
